@@ -3,6 +3,8 @@ import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import DefaultLayout from "./layout/DefaultLayout";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
+import Alerts from "./pages/Alerts";
+import Activity from "./pages/Activity";
 
 function App() {
   return (
@@ -11,6 +13,8 @@ function App() {
         <DefaultLayout>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/activity" element={<Activity />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </DefaultLayout>

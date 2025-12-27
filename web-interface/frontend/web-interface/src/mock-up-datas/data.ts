@@ -7,15 +7,15 @@ import type {
 } from "../types/data";
 import { ALERT_TYPES, DEVICE_STATUS } from "../types/data";
 
-// Gerçekçi sensör verileri
+// Gerçekçi sensör verileri - Bebek sıcaklığının düşüp yükseldiği örnek veriler
 export const mockSensorData: SensorData[] = [
   {
     id: "1",
     deviceId: "device-001",
     timestamp: new Date().toISOString(),
-    temperature: 23.5, // Normal oda sıcaklığı
-    humidity: 55.2, // Normal nem
-    bodyTemperature: 36.8, // Normal bebek vücut sıcaklığı
+    temperature: 23.5,
+    humidity: 55.2,
+    bodyTemperature: 36.8, // Normal
   },
   {
     id: "2",
@@ -23,7 +23,7 @@ export const mockSensorData: SensorData[] = [
     timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     temperature: 23.2,
     humidity: 54.8,
-    bodyTemperature: 36.9,
+    bodyTemperature: 37.1, // Hafif yüksek
   },
   {
     id: "3",
@@ -31,7 +31,55 @@ export const mockSensorData: SensorData[] = [
     timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     temperature: 23.8,
     humidity: 56.1,
-    bodyTemperature: 36.7,
+    bodyTemperature: 37.4, // Yüksek
+  },
+  {
+    id: "4",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    temperature: 23.6,
+    humidity: 55.5,
+    bodyTemperature: 37.3, // Hala yüksek
+  },
+  {
+    id: "5",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    temperature: 23.4,
+    humidity: 55.0,
+    bodyTemperature: 37.0, // Düşüşe başladı
+  },
+  {
+    id: "6",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    temperature: 23.3,
+    humidity: 54.9,
+    bodyTemperature: 36.7, // Daha düşüldü
+  },
+  {
+    id: "7",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    temperature: 23.1,
+    humidity: 54.5,
+    bodyTemperature: 36.4, // Çok düşük
+  },
+  {
+    id: "8",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+    temperature: 23.2,
+    humidity: 54.8,
+    bodyTemperature: 36.5, // Yükselmeye başladı
+  },
+  {
+    id: "9",
+    deviceId: "device-001",
+    timestamp: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    temperature: 23.4,
+    humidity: 55.2,
+    bodyTemperature: 36.9, // Normal'e yaklaştı
   },
 ];
 

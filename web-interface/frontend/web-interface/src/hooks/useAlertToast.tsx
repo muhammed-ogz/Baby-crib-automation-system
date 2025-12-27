@@ -11,7 +11,7 @@ export const useAlertToast = (alerts: Alert[]) => {
     unreadAlerts.forEach((alert) => {
       const toastId = `alert-${alert.id}`;
       const icon = getAlertIcon(alert.type);
-      const duration = alert.severity === "high" ? 8000 : 4000;
+      const duration = alert.severity === "high" ? 2000 : 4000;
 
       // Önem derecesine göre farklı toast türleri
       if (alert.severity === "high") {

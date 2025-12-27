@@ -7,6 +7,16 @@ import {
   Wifi,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useAlertToast } from "../hooks/useAlertToast";
 import {
   defaultThresholds,
@@ -21,15 +31,58 @@ import { DEVICE_STATUS } from "../types/data";
 export default function Home() {
   const [currentData, setCurrentData] = useState<SensorData>(mockSensorData[0]);
   const [device] = useState<Device>(mockDevices[0]);
+  const [chartData, setChartData] = useState(
+    mockSensorData
+      .slice()
+      .reverse()
+      .map((data, index) => ({
+        time: `${index * 5}m`,
+        bodyTemp: data.bodyTemperature,
+        timestamp: new Date(data.timestamp).toLocaleTimeString("tr-TR"),
+      }))
+  );
 
   // Alert toast hook'unu kullan
   useAlertToast(mockAlerts);
 
-  // Gerçek zamanlı veri simülasyonu
-  useEffect(() => {
-    const interval = setInterval(() => {
+  // Backend'den veri çekme
+  const fetchSensorData = async () => {
+    try {
+      // URL'den parametreleri al (örnek olarak sabit değerler)
+      const params = new URLSearchParams(window.location.search);
+      const temperature = params.get('temperature') || '22';
+      const humidity = params.get('humidity') || '60';
+      const babyTemperature = params.get('babyTemperature') || '36.5';
+
+      const response = await fetch(
+        `http://localhost:3001/v1/values?temperature=${temperature}&humidity=${humidity}&babyTemperature=${babyTemperature}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentData({
+          id: currentData.id,
+          deviceId: currentData.deviceId,
+          temperature: parseFloat(data.temperature),
+          humidity: parseFloat(data.humidity),
+          bodyTemperature: parseFloat(data.babyTemperature),
+          timestamp: data.timestamp,
+        });
+      }
+    } catch (error) {
+      // Backend bağlantısı yoksa mock veri kullan
+      console.log('Backend bağlantısı yok, mock veri kullanılıyor');
       const newData = generateRandomSensorData();
       setCurrentData(newData);
+    }
+  };
+
+  // Gerçek zamanlı veri simülasyonu
+  useEffect(() => {
+    fetchSensorData(); // İlk yüklemede veri çek
+    
+    const interval = setInterval(() => {
+      fetchSensorData();
     }, 5000); // 5 saniyede bir güncelle
 
     return () => clearInterval(interval);
@@ -291,6 +344,90 @@ export default function Home() {
           <div className="text-center p-4 bg-purple-50 rounded-lg transition-all duration-200 ease-in-out hover:bg-purple-100 hover:transform hover:scale-105 cursor-pointer">
             <div className="text-2xl font-bold text-purple-600">24/7</div>
             <div className="text-sm text-gray-600">İzleme</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bebek Vücut Sıcaklığı Grafik Sayfası */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          📊 Bebek Vücut Sıcaklığı Grafiği
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Son 40 dakika içindeki vücut sıcaklığı değişimleri
+        </p>
+
+        <div className="w-full h-80 bg-gray-50 rounded-lg p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="time" stroke="#6b7280" />
+              <YAxis
+                domain={[35, 38]}
+                stroke="#6b7280"
+                label={{ value: "°C", angle: -90, position: "insideLeft" }}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                }}
+                formatter={(value) => [`${value.toFixed(1)}°C`, "Vücut Sıcaklığı"]}
+                labelFormatter={(label) => `${label} önce`}
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="bodyTemp"
+                stroke="#ef4444"
+                strokeWidth={2}
+                dot={{ fill: "#ef4444", r: 4 }}
+                activeDot={{ r: 6 }}
+                name="Vücut Sıcaklığı"
+              />
+              {/* Normal aralık gösterileri */}
+              <Line
+                type="linear"
+                dataKey={() => defaultThresholds.bodyTemperature.min}
+                stroke="#10b981"
+                strokeWidth={1}
+                strokeDasharray="5 5"
+                dot={false}
+                name="Min Normal"
+              />
+              <Line
+                type="linear"
+                dataKey={() => defaultThresholds.bodyTemperature.max}
+                stroke="#f59e0b"
+                strokeWidth={1}
+                strokeDasharray="5 5"
+                dot={false}
+                name="Max Normal"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <p className="text-gray-600">Normal Aralık</p>
+            <p className="font-semibold text-green-700">
+              {defaultThresholds.bodyTemperature.min}°C -{" "}
+              {defaultThresholds.bodyTemperature.max}°C
+            </p>
+          </div>
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <p className="text-gray-600">En Yüksek Kayıt</p>
+            <p className="font-semibold text-red-700">
+              {Math.max(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
+            </p>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-gray-600">En Düşük Kayıt</p>
+            <p className="font-semibold text-blue-700">
+              {Math.min(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
+            </p>
           </div>
         </div>
       </div>

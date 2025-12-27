@@ -46,7 +46,7 @@ export default function Sidebar({ isOpen, onClose, isMobile }: SidebarProps) {
   };
 
   const sidebarClasses = `
-    fixed top-0 left-0 h-full w-64 bg-white shadow-xl border-r border-gray-200 z-50 transform transition-all duration-500 ease-in-out
+    fixed top-0 left-0 lg:h-[calc(100vh-64px)] h-full w-64 lg:w-56 bg-white shadow-xl border-r border-gray-200 z-50 transform transition-all duration-500 ease-in-out
     ${
       isMobile
         ? isOpen
