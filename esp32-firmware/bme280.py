@@ -2,9 +2,7 @@
 BME280 Sıcaklık, Nem ve Basınç Sensörü Kütüphanesi
 """
 
-from array import array
-
-from ustruct import unpack, unpack_from
+from ustruct import unpack
 
 # BME280 varsayılan adres
 BME280_I2C_ADDR = 0x76
@@ -77,7 +75,7 @@ class BME280:
         self.t_fine = var1 + var2
         return (self.t_fine * 5 + 128) >> 8
 
-    def compensate_pressure(self, raw):
+    def compensate_pressure(self, raw):  # kaldırılacak basınç okunmayacak
         """Basınç kompanzasyonu"""
         var1 = self.t_fine - 128000
         var2 = var1 * var1 * self.dig_P6
