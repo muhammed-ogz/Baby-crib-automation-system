@@ -15,8 +15,14 @@ class BME280:
 
         # Chip ID kontrolü
         chip_id = self.i2c.readfrom_mem(self.address, 0xD0, 1)[0]
-        if chip_id != 0x60:
-            raise RuntimeError(f"BME280 bulunamadı! Chip ID: {hex(chip_id)}")
+        if chip_id == 0x60:
+            print(f"  └─ Chip ID: 0x60 (BME280 doğrulandı)")
+        elif chip_id == 0x58:
+            print(f"  └─ Chip ID: 0x58 (BMP280 tespit edildi - nem sensörü yok)")
+        else:
+            raise RuntimeError(
+                f"BME280/BMP280 bulunamadı! Bilinmeyen Chip ID: {hex(chip_id)}"
+            )
 
         # Kalibrasyon verilerini oku
         self._read_calibration()
@@ -30,13 +36,20 @@ class BME280:
 
     def _read_calibration(self):
         """Kalibrasyon verilerini oku"""
-        coeff = self.i2c.readfrom_mem(self.address, 0x88, 24)
-        coeff = unpack("<HhhHhhhhhhhh", coeff)
+        try:
+            coeff = self.i2c.readfrom_mem(self.address, 0x88, 24)
+            coeff = unpack("<HhhHhhhhhhhh", coeff)
 
-        coeff_h = self.i2c.readfrom_mem(self.address, 0xA1, 1) + self.i2c.readfrom_mem(
-            self.address, 0xE1, 7
-        )
-        coeff_h = unpack("<BbBbbb", coeff_h)
+            # Humidity kalibrasyon: 1 byte (0xA1) + 7 bytes (0xE1-0xE7) = 8 bytes total
+            # Format: H1(B) + H2(h) + H3(B) + E4(B) + E5(B) + E6(B) + H6(b) = 7 elements
+            coeff_h = self.i2c.readfrom_mem(
+                self.address, 0xA1, 1
+            ) + self.i2c.readfrom_mem(self.address, 0xE1, 7)
+            coeff_h = unpack("<BhBBBBb", coeff_h)
+        except Exception as e:
+            raise RuntimeError(
+                f"Kalibrasyon verisi okunamadı: {e}\n   → SDO pinini GND'ye bağlayın ve I2C pull-up dirençlerini kontrol edin"
+            )
 
         self.dig_T1, self.dig_T2, self.dig_T3 = coeff[0:3]
         (
