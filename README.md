@@ -1,50 +1,64 @@
 # Bebek Beşiği Otomasyon Sistemi
 
-Bu proje, NodeMCU (ESP8266) tabanlı bir gömülü cihaz ile ortam sıcaklığı, nem ve temassız (IR/laser işaretli) vücut sıcaklığı ölçümleri toplayıp, bu verileri bir Node.js arka ucuna göndererek React tabanlı bir web arayüzünde gösteren bir bebek beşiği otomasyon sistemini tanımlar.
+Bu proje, ESP32 tabanlı bir gömülü cihaz ile ortam sıcaklığı, nem ve temassız (IR/laser işaretli) vücut sıcaklığı ölçümleri toplayıp, bu verileri bir Node.js arka ucuna göndererek React tabanlı bir web arayüzünde gösteren bir bebek beşiği otomasyon sistemini tanımlar.
 
 Özellikler
 
-- Ortam sıcaklığı ve nem ölçümü (ör. DHT11/DHT22)
-- Temassız vücut sıcaklığı ölçümü (ör. MLX90614 veya benzeri IR sensör; bazı modeller lazer işaretleyici ile gelir)
-- NodeMCU (ESP8266) üzerinden Wi-Fi ile veri gönderme
-- Node.js/TypeScript arka uç (REST API) — verileri alır ve web arayüzüne sunar
-- React (Vite/CRA) ön uç — gerçek zamanlı izleme, veri geçmişi ve uyarılar
+- Ortam sıcaklığı ve nem ölçümü (BME280 veya DHT11 ile yedekleme)
+- Temassız vücut sıcaklığı ölçümü (MLX90614 IR sensör)
+- ESP32 (MicroPython) üzerinden Wi-Fi ile veri gönderme ve offline veri tamponlama
+- Node.js/TypeScript arka uç (REST API + Socket.io) — verileri MongoDB'de saklar ve gerçek zamanlı yayınlar
+- React (Vite + TypeScript) ön uç — gerçek zamanlı izleme, grafik gösterimi ve dinamik uyarı eşikleri
 
 Bu README şu bölümleri içerir:
 
 - Sistem mimarisi
 - Donanım bileşenleri ve örnek bağlantılar
-- ESP8266/NodeMCU için firmware sözleşmesi (veri formatı, uç nokta)
+- ESP32 firmware sözleşmesi (veri formatı, uç nokta)
 - Backend ve frontend kurulum & çalıştırma adımları
 - Güvenlik, test ve sorun giderme notları
 
 ## Sistem Mimarisi (kısa)
 
-1. NodeMCU (ESP8266) cihazı bağlı sensörlerden (örn. DHT22, MLX90614) ölçüm alır.
-2. Ölçümler belli aralıklarla arka uca (REST API) POST edilir.
-3. Arka uç veriyi alıp gerektiğinde depolar (örneğin kısa süreli bellek, dosya veya veritabanı) ve ön uca WebSocket/SSE veya düzenli HTTP ile sağlar.
-4. React tabanlı ön uç gerçek zamanlı verileri gösterir, geçmişe bakma ve alarm/uyarı mekanizmaları sunar.
+1. ESP32 cihazı bağlı sensörlerden (BME280, DHT11, MLX90614) ölçüm alır.
+2. Ölçümler her 5 saniyede bir arka uca (REST API) POST edilir. WiFi kesintisinde en fazla 50 veri noktası RAM'de tamponlanır.
+3. Arka uç veriyi MongoDB'ye kaydeder (30 gün TTL) ve Socket.io ile tüm bağlı istemcilere gerçek zamanlı broadcast eder.
+4. React tabanlı ön uç Socket.io ile gerçek zamanlı verileri alır, grafik gösterir ve dinamik eşik değerlerine göre uyarı gösterir.
 
 ## Donanım Bileşenleri (örnek)
 
-- NodeMCU ESP8266 (özgün: ESP-12E modülü)
-- Ortam sıcaklık ve nem sensörü: DHT11 veya DHT22 (DHT22 daha hassas)
-- Temassız vücut sıcaklığı: MLX90614 (I2C) veya başka bir IR temassız termometre (bazı cihazlarda lazer işaretleyici bulunur)
-- Güç kaynağı: 5V USB adaptör (veya uygun regülatör)
-- İhtiyaç halinde: breadboard, bağlantı kabloları, gerilim regülatörü, pull-up dirençleri
+- **ESP32 DevKit** (30-pin versiyonu önerilir) - Dual-core 240 MHz, 520 KB RAM, WiFi/Bluetooth
+- **Ortam sensörü:** BME280 (I2C) - sıcaklık, nem ve basınç ölçümü (öncelikli)
+- **Yedek ortam sensörü:** DHT11 (Digital) - BME280 yoksa devreye girer
+- **Temassız vücut sıcaklığı:** MLX90614 (I2C) - IR temassız termometre
+- **Güç kaynağı:** 5V USB adaptör veya 3.7V LiPo batarya (gerilim regülatörü ile)
+- **İhtiyaç halinde:** breadboard, jumper kablolar, 4.7kΩ pull-up dirençleri (DHT11 için)
 
-Not: Kablolama ve pin atamaları için kullandığınız NodeMCU versiyonunun pin haritasını kontrol edin.
+Not: ESP32'nin dual-core mimarisi ve 520 KB RAM'i, ESP8266'ya (80 KB RAM) göre çok daha stabil çalışma sağlar.
 
-### Örnek Bağlantılar (öneri)
+### Örnek Bağlantılar (ESP32 DevKit 30-pin)
 
-- DHTxx veri pini -> örnek: D4 (GPIO2) (DHT'ye 4.7k pull-up gerekir)
-- MLX90614 -> I2C: SDA -> D2 (GPIO4), SCL -> D1 (GPIO5) (NodeMCU pin isimleri kart etiketlerine göre farklılık gösterebilir)
+- **DHT11:** Data pin → GPIO4 (D4), VCC → 3.3V, GND → GND (4.7kΩ pull-up önerilir)
+- **BME280 (I2C):** SDA → GPIO21, SCL → GPIO22, VCC → 3.3V, GND → GND
+- **MLX90614 (I2C):** SDA → GPIO21, SCL → GPIO22, VCC → 3.3V, GND → GND
 
-Bu bağlantılar yalnızca örnektir; kartınızın pin çizelgesini doğrulayın.
+**Not:** BME280 ve MLX90614 aynı I2C bus'ı paylaşır (GPIO21/22). Her ikisi de farklı I2C adreslerine sahip olduğu için sorunsuz çalışır.
 
-## ESP8266 Firmware / Yazılım Sözleşmesi
+## ESP32 Firmware / Yazılım Sözleşmesi
 
-ESP cihazı arka uca JSON formatında ölçümleri POST edecektir. Örnek payload:
+ESP32 cihazı MicroPython ile çalışır ve arka uca JSON formatında ölçümleri POST eder.
+
+**Önemli özellikler:**
+
+- NTP ile otomatik saat senkronizasyonu (boot'ta)
+- WiFi kesintisinde 50 verilik circular buffer (RAM-based)
+- Sensör okuma önceliği: BME280 > DHT11
+- Her 5 saniyede bir veri gönderimi
+- Otomatik yeniden bağlanma ve retry mekanizması
+
+### Veri Formatı
+
+Örnek payload:
 
 {
 "deviceId": "node-01",
@@ -54,10 +68,12 @@ ESP cihazı arka uca JSON formatında ölçümleri POST edecektir. Örnek payloa
 "timestamp": "2025-11-08T12:34:56Z"
 }
 
-Öneriler
+**Uygulanan özellikler:**
 
-- Cihaz, Wi-Fi bağlantısı koptuğunda veriyi yerelde tamponlayıp (ör. küçük döngüsel bellek) bağlantı sağlanınca gönderme yapmalı.
-- Güvenlik: Mümkünse TLS kullanın (ESP8266 için fazladan maliyet/karmaşıklık olabilir). Alternatif: cihaz tarafında bir API anahtarı/tokenu gönderin ve arka uçta doğrulayın.
+- ✅ Circular buffer mekanizması: WiFi yoksa 50 veri noktası RAM'de saklanır, bağlantı gelince FIFO sırasıyla gönderilir.
+- ✅ NTP senkronizasyonu: boot.py'de otomatik olarak gerçek zaman alınır.
+- ⚠️ TLS/HTTPS: ESP32 destekler ancak şu anda HTTP kullanılıyor (akademik proje için yeterli).
+- ⚠️ API Authentication: Şu anda yok. Production için API key veya JWT token mekanizması eklenmelidir.
 
 ## Backend (Node.js) — Kurulum & Çalıştırma
 
