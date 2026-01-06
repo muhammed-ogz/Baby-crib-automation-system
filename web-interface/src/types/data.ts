@@ -22,10 +22,8 @@ export const DEVICE_STATUS = {
 export interface Device {
   id: string;
   name: string;
-  wifiSSID: string;
   status: DeviceStatus;
   lastSeen: string;
-  location?: string;
 }
 
 // Eşik değerleri
