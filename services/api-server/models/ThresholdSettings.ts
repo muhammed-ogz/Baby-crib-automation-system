@@ -43,14 +43,14 @@ const ThresholdSettingsSchema = new Schema<IThresholdSettings>(
           required: true,
           default: 20,
           min: -10,
-          max: 50,
+          max: 100, // Geniş aralık - kullanıcı istediği değeri girebilir
         },
         max: {
           type: Number,
           required: true,
           default: 26,
           min: -10,
-          max: 50,
+          max: 100, // Geniş aralık
         },
       },
       humidity: {
@@ -74,15 +74,15 @@ const ThresholdSettingsSchema = new Schema<IThresholdSettings>(
           type: Number,
           required: true,
           default: 36,
-          min: 10, // Allow lower values for testing/room temp readings
-          max: 50,
+          min: 0, // Çok geniş - oda sıcaklığından ateşe kadar
+          max: 100,
         },
         max: {
           type: Number,
           required: true,
           default: 37,
-          min: 10,
-          max: 50,
+          min: 0,
+          max: 100, // Çok geniş aralık
         },
       },
     },

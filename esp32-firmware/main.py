@@ -275,11 +275,11 @@ class SensorReader:
         elif raw_data["dht11"]["temp"] is not None:
             temperature = float(raw_data["dht11"]["temp"])
 
-        # Nem: BME280 > DHT11
-        if raw_data["bme280"]["humidity"] is not None:
-            humidity = raw_data["bme280"]["humidity"]
-        elif raw_data["dht11"]["humidity"] is not None:
+        # Nem: DHT11 > BME280 (DHT11 öncelikli)
+        if raw_data["dht11"]["humidity"] is not None:
             humidity = float(raw_data["dht11"]["humidity"])
+        elif raw_data["bme280"]["humidity"] is not None:
+            humidity = raw_data["bme280"]["humidity"]
 
         # Vücut sıcaklığı: MLX90614 object temperature
         if raw_data["mlx90614"]["object"] is not None:

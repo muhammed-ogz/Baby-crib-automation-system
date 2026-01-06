@@ -46,28 +46,32 @@ async function getThresholdsFromDB(deviceId: string) {
   try {
     let thresholdDoc = await ThresholdSettings.findOne({ deviceId }).lean();
 
-    // Eğer cihaz için threshold yoksa, varsayılan değerleri oluştur
+    // Eğer cihaz için threshold yoksa, çok geniş varsayılan değerler oluştur
+    // Kullanıcı Settings sayfasında kendi değerlerini girecek
     if (!thresholdDoc) {
-      console.log(`Creating default thresholds for device: ${deviceId}`);
+      console.log(
+        `Creating wide default thresholds for device: ${deviceId} - User should set custom values in Settings`
+      );
       const newThreshold = new ThresholdSettings({
         deviceId,
         thresholds: {
-          temperature: { min: 20, max: 26 },
-          humidity: { min: 45, max: 65 },
-          bodyTemperature: { min: 36, max: 37 },
+          temperature: { min: 0, max: 100 }, // Geniş aralık - kullanıcı ayarlayacak
+          humidity: { min: 0, max: 100 }, // Geniş aralık - kullanıcı ayarlayacak
+          bodyTemperature: { min: 0, max: 100 }, // Geniş aralık (hipotermiden ateşe kadar)
         },
       });
-      thresholdDoc = await newThreshold.save();
+      const saved = await newThreshold.save();
+      return saved.thresholds;
     }
 
     return thresholdDoc.thresholds;
   } catch (error) {
     console.error(`Error fetching thresholds for ${deviceId}:`, error);
-    // Fallback to hardcoded defaults
+    // Hata durumunda çok geniş fallback değerler - hiçbir uyarı gelmesin
     return {
-      temperature: { min: 5, max: 50 },
-      humidity: { min: 45, max: 65 },
-      bodyTemperature: { min: 5, max: 50 },
+      temperature: { min: -10, max: 50 },
+      humidity: { min: 0, max: 100 },
+      bodyTemperature: { min: 10, max: 50 },
     };
   }
 }
@@ -143,7 +147,7 @@ function checkThresholds(
 // Routes
 
 // Health check
-app.get("/health", (req: Request, res: Response) => {
+app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -174,6 +178,16 @@ app.post(
       // Get dynamic thresholds from database
       const thresholds = await getThresholdsFromDB(deviceId);
 
+      console.log(
+        `🔍 Thresholds for ${deviceId}:`,
+        JSON.stringify(thresholds, null, 2)
+      );
+      console.log(`📊 Received sensor data:`, {
+        temperature,
+        humidity,
+        bodyTemperature,
+      });
+
       // Check thresholds
       const alerts = checkThresholds(
         {
@@ -182,6 +196,11 @@ app.post(
           bodyTemperature,
         },
         thresholds
+      );
+
+      console.log(
+        `🚨 Generated alerts:`,
+        alerts.length > 0 ? JSON.stringify(alerts, null, 2) : "No alerts"
       );
 
       // Save to MongoDB
@@ -197,17 +216,23 @@ app.post(
       await sensorData.save();
 
       // Broadcast to all connected WebSocket clients
-      io.emit("sensorData", {
+      const broadcastData = {
         id: sensorData._id.toString(),
         temperature: sensorData.temperature,
         humidity: sensorData.humidity,
         bodyTemperature: sensorData.bodyTemperature,
         deviceId: sensorData.deviceId,
         timestamp: sensorData.timestamp.toISOString(),
-        alerts: sensorData.alerts,
-      });
+        alerts: sensorData.alerts || [],
+      };
 
-      console.log(`Sensor data received from ${deviceId}:`, {
+      console.log(
+        `📡 Broadcasting to WebSocket clients:`,
+        JSON.stringify(broadcastData, null, 2)
+      );
+      io.emit("sensorData", broadcastData);
+
+      console.log(`✅ Sensor data received from ${deviceId}:`, {
         temperature,
         humidity,
         bodyTemperature,
@@ -314,7 +339,7 @@ app.get("/api/sensors/history", async (req: Request, res: Response) => {
 });
 
 // Legacy endpoint for frontend compatibility
-app.get("/v1/values", async (req: Request, res: Response) => {
+app.get("/v1/values", async (_req: Request, res: Response) => {
   try {
     const latestData = await SensorData.findOne()
       .sort({ timestamp: -1 })
@@ -350,15 +375,15 @@ app.get("/api/settings/thresholds", async (req: Request, res: Response) => {
     const thresholdDoc = await ThresholdSettings.findOne({ deviceId }).lean();
 
     if (!thresholdDoc) {
-      // Return default values if not found
+      // Kullanıcı henüz ayarlamamışsa geniş varsayılan değerler dön
       return res.json({
         success: true,
         data: {
           deviceId,
           thresholds: {
-            temperature: { min: 20, max: 26 },
-            humidity: { min: 45, max: 65 },
-            bodyTemperature: { min: 36, max: 37 },
+            temperature: { min: 10, max: 40 }, // Geniş aralık - kullanıcı ayarlayacak
+            humidity: { min: 20, max: 80 }, // Geniş aralık - kullanıcı ayarlayacak
+            bodyTemperature: { min: 32, max: 42 }, // Geniş aralık
           },
           updatedAt: new Date().toISOString(),
         },
@@ -536,7 +561,7 @@ process.on("SIGTERM", () => {
   console.log("SIGTERM signal received: closing HTTP server");
   server.close(() => {
     console.log("HTTP server closed");
-    mongoose.connection.close(false, () => {
+    mongoose.connection.close().then(() => {
       console.log("MongoDB connection closed");
       process.exit(0);
     });

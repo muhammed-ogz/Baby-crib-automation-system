@@ -1,7 +1,5 @@
-import { Baby, Bell, Menu, User, X } from "lucide-react";
+import { Baby, Bell, Menu, X } from "lucide-react";
 import { useState } from "react";
-import { mockAlerts } from "../mock-up-datas/data";
-import { mockUser } from "../mock-up-datas/user";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -11,7 +9,8 @@ interface NavbarProps {
 
 export default function Navbar({ onMenuToggle, isMobile }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [alerts, setAlerts] = useState(mockAlerts);
+  // Uyarılar artık useSensorData'dan WebSocket üzerinden gelecek
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   const unreadAlertsCount = alerts.filter((alert) => !alert.isRead).length;
 
@@ -19,9 +18,7 @@ export default function Navbar({ onMenuToggle, isMobile }: NavbarProps) {
     setShowNotifications(!showNotifications);
     // Tüm okulanmamış bildirimleri okundu olarak işaretle
     if (!showNotifications) {
-      setAlerts(
-        alerts.map((alert) => ({ ...alert, isRead: true }))
-      );
+      setAlerts(alerts.map((alert) => ({ ...alert, isRead: true })));
     }
   };
 
@@ -124,15 +121,15 @@ export default function Navbar({ onMenuToggle, isMobile }: NavbarProps) {
                                   alert.severity === "high"
                                     ? "text-red-700"
                                     : alert.severity === "medium"
-                                      ? "text-orange-700"
-                                      : "text-green-700"
+                                    ? "text-orange-700"
+                                    : "text-green-700"
                                 }`}
                               >
                                 {alert.severity === "high"
                                   ? "🔴 Acil"
                                   : alert.severity === "medium"
-                                    ? "🟡 Orta"
-                                    : "🟢 Düşük"}
+                                  ? "🟡 Orta"
+                                  : "🟢 Düşük"}
                               </p>
                               {!alert.isRead && (
                                 <span className="inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
@@ -182,22 +179,10 @@ export default function Navbar({ onMenuToggle, isMobile }: NavbarProps) {
 
           {/* Kullanıcı Profili */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-              {mockUser.avatar ? (
-                <img
-                  src={mockUser.avatar}
-                  alt={mockUser.name}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <User size={16} className="text-gray-600" />
-              )}
-            </div>
             <div className="hidden md:block">
               <p className="text-sm font-medium text-gray-800">
-                {mockUser.name}
+                Örnek Kullanıcı
               </p>
-              <p className="text-xs text-gray-500">{mockUser.email}</p>
             </div>
           </div>
         </div>

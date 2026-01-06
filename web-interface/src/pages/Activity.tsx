@@ -4,13 +4,15 @@ import {
   CheckCircle,
   Clock,
   Droplets,
-  Fan,
   Thermometer,
+  TrendingUp,
   Wifi,
+  WifiOff,
 } from "lucide-react";
-import { useMemo } from "react";
-import { mockDevices, mockSensorData } from "../mock-up-datas/data";
-import type { Device, SensorData } from "../types/data";
+import { useEffect, useMemo, useState } from "react";
+import { useSensorData } from "../hooks/useSensorData";
+import { defaultThresholds } from "../mock-up-datas/data";
+import type { SensorData } from "../types/data";
 
 type EventSeverity = "low" | "medium" | "high";
 type DeviceEvent = {
@@ -38,61 +40,154 @@ const getSeverityClasses = (s: EventSeverity) => {
 };
 
 export default function Activity() {
-  const device: Device = mockDevices[0];
-  const latest: SensorData = mockSensorData[0];
+  const { sensorData, isConnected, isLoading } = useSensorData();
+  const [sensorHistory, setSensorHistory] = useState<SensorData[]>([]);
+  const [currentData, setCurrentData] = useState<SensorData | null>(null);
 
-  // Örnek fan/sensör durumları
-  const fanIsOn = true;
-  const fanLastChanged = new Date(Date.now() - 12 * 60 * 1000).toISOString();
-  const sensorStartedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  // Sensör verilerini kaydet (son 50 ölçüm)
+  useEffect(() => {
+    if (sensorData) {
+      setCurrentData(sensorData);
+      setSensorHistory((prev) => {
+        const newHistory = [sensorData, ...prev];
+        return newHistory.slice(0, 50); // Son 50 kayıt
+      });
+    }
+  }, [sensorData]);
 
-  // Zaman çizelgesi (örnek olaylar)
+  // Zaman çizelgesi (gerçek sensör kayıtları)
   const events: DeviceEvent[] = useMemo(() => {
-    return [
-      {
-        id: "evt-5",
+    if (!currentData) return [];
+
+    const newEvents: DeviceEvent[] = [];
+
+    // Son ölçüm
+    newEvents.push({
+      id: `evt-latest-${currentData.timestamp}`,
+      type: "sensor_reading",
+      message: `Yeni ölçüm alındı: Sıcaklık ${currentData.temperature.toFixed(
+        1
+      )}°C, Nem %${currentData.humidity.toFixed(
+        1
+      )}, Vücut ${currentData.bodyTemperature.toFixed(1)}°C`,
+      timestamp: currentData.timestamp,
+      severity: "low",
+    });
+
+    // Vücut sıcaklığı kontrolleri
+    if (currentData.bodyTemperature > defaultThresholds.bodyTemperature.max) {
+      newEvents.push({
+        id: `evt-body-high-${currentData.timestamp}`,
         type: "sensor_reading",
-        message: `Vücut sıcaklığı ölçümü: ${latest.bodyTemperature.toFixed(1)}°C`,
-        timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-        severity: latest.bodyTemperature > 37 ? "high" : "low",
-      },
-      {
-        id: "evt-4",
+        message: `⚠️ Yüksek vücut sıcaklığı tespit edildi: ${currentData.bodyTemperature.toFixed(
+          1
+        )}°C (Normal: ${defaultThresholds.bodyTemperature.min}-${
+          defaultThresholds.bodyTemperature.max
+        }°C)`,
+        timestamp: currentData.timestamp,
+        severity: "high",
+      });
+    } else if (
+      currentData.bodyTemperature < defaultThresholds.bodyTemperature.min
+    ) {
+      newEvents.push({
+        id: `evt-body-low-${currentData.timestamp}`,
         type: "sensor_reading",
-        message: `Nem ölçümü: %${latest.humidity.toFixed(1)}`,
-        timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
-        severity: latest.humidity > 65 || latest.humidity < 45 ? "medium" : "low",
-      },
-      {
-        id: "evt-3",
-        type: "fan_on",
-        message: "Fan cihazı aktif edildi",
-        timestamp: fanLastChanged,
+        message: `⚠️ Düşük vücut sıcaklığı tespit edildi: ${currentData.bodyTemperature.toFixed(
+          1
+        )}°C (Normal: ${defaultThresholds.bodyTemperature.min}-${
+          defaultThresholds.bodyTemperature.max
+        }°C)`,
+        timestamp: currentData.timestamp,
+        severity: "high",
+      });
+    }
+
+    // Nem kontrolleri
+    if (currentData.humidity > defaultThresholds.humidity.max) {
+      newEvents.push({
+        id: `evt-humidity-high-${currentData.timestamp}`,
+        type: "sensor_reading",
+        message: `⚠️ Yüksek nem seviyesi: %${currentData.humidity.toFixed(
+          1
+        )} (Normal: %${defaultThresholds.humidity.min}-%${
+          defaultThresholds.humidity.max
+        })`,
+        timestamp: currentData.timestamp,
+        severity: "medium",
+      });
+    } else if (currentData.humidity < defaultThresholds.humidity.min) {
+      newEvents.push({
+        id: `evt-humidity-low-${currentData.timestamp}`,
+        type: "sensor_reading",
+        message: `⚠️ Düşük nem seviyesi: %${currentData.humidity.toFixed(
+          1
+        )} (Normal: %${defaultThresholds.humidity.min}-%${
+          defaultThresholds.humidity.max
+        })`,
+        timestamp: currentData.timestamp,
+        severity: "medium",
+      });
+    }
+
+    // Sıcaklık kontrolleri
+    if (currentData.temperature > defaultThresholds.temperature.max) {
+      newEvents.push({
+        id: `evt-temp-high-${currentData.timestamp}`,
+        type: "sensor_reading",
+        message: `⚠️ Yüksek oda sıcaklığı: ${currentData.temperature.toFixed(
+          1
+        )}°C (Normal: ${defaultThresholds.temperature.min}-${
+          defaultThresholds.temperature.max
+        }°C)`,
+        timestamp: currentData.timestamp,
+        severity: "medium",
+      });
+    } else if (currentData.temperature < defaultThresholds.temperature.min) {
+      newEvents.push({
+        id: `evt-temp-low-${currentData.timestamp}`,
+        type: "sensor_reading",
+        message: `⚠️ Düşük oda sıcaklığı: ${currentData.temperature.toFixed(
+          1
+        )}°C (Normal: ${defaultThresholds.temperature.min}-${
+          defaultThresholds.temperature.max
+        }°C)`,
+        timestamp: currentData.timestamp,
+        severity: "medium",
+      });
+    }
+
+    // Geçmiş kayıtlardan event'ler oluştur
+    sensorHistory.slice(1, 10).forEach((data, index) => {
+      newEvents.push({
+        id: `evt-history-${data.timestamp}-${index}`,
+        type: "sensor_reading",
+        message: `Ölçüm kaydı: Sıcaklık ${data.temperature.toFixed(
+          1
+        )}°C, Nem %${data.humidity.toFixed(
+          1
+        )}, Vücut ${data.bodyTemperature.toFixed(1)}°C`,
+        timestamp: data.timestamp,
         severity: "low",
-      },
-      {
-        id: "evt-2",
-        type: "device_status",
-        message: `Cihaz durumu: ${device.status === "working" ? "Çalışıyor" : device.status === "disabled" ? "Devre Dışı" : "Arıza"}`,
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        severity: device.status === "error" ? "high" : device.status === "disabled" ? "medium" : "low",
-      },
-      {
-        id: "evt-1",
-        type: "sensor_started",
-        message: "Sensör başlatıldı",
-        timestamp: sensorStartedAt,
-        severity: "low",
-      },
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [device.status, fanLastChanged, latest.bodyTemperature, latest.humidity, sensorStartedAt]);
+      });
+    });
+
+    return newEvents.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [currentData, sensorHistory]);
 
   return (
     <div className="space-y-6">
       {/* Başlık */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Aktivite</h1>
-        <p className="text-gray-600">Sensör ve fan cihazlarının durumları ile örnek zaman çizelgesi</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+          Aktivite
+        </h1>
+        <p className="text-gray-600">
+          Sensör ve fan cihazlarının durumları ile örnek zaman çizelgesi
+        </p>
       </div>
 
       {/* Özet Kartlar */}
@@ -100,69 +195,97 @@ export default function Activity() {
         {/* Sensör Durumu */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-3">
-            <div className="bg-green-100 p-3 rounded-lg">
-              <Thermometer size={20} className="text-green-700" />
+            <div
+              className={`${
+                isConnected ? "bg-green-100" : "bg-red-100"
+              } p-3 rounded-lg`}
+            >
+              <Thermometer
+                size={20}
+                className={isConnected ? "text-green-700" : "text-red-700"}
+              />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Sensör Durumu</h3>
-              <p className="text-sm text-gray-600">Bebek odası sensörü</p>
+              <p className="text-sm text-gray-600">ESP32 Sensör</p>
             </div>
           </div>
           <div className="flex items-center gap-2 mb-2">
-            {device.status === "working" ? (
+            {isConnected ? (
               <CheckCircle size={16} className="text-green-600" />
             ) : (
               <AlertTriangle size={16} className="text-red-600" />
             )}
             <span className="text-sm font-medium">
-              {device.status === "working" ? "Çalışıyor" : device.status === "disabled" ? "Devre Dışı" : "Arıza"}
+              {isLoading
+                ? "Bağlanıyor..."
+                : isConnected
+                ? "Çalışıyor"
+                : "Bağlantı Yok"}
             </span>
           </div>
           <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Clock size={12} /> Son görülme: {new Date(device.lastSeen).toLocaleTimeString("tr-TR")}
+            <Clock size={12} />{" "}
+            {currentData
+              ? `Son ölçüm: ${new Date(
+                  currentData.timestamp
+                ).toLocaleTimeString("tr-TR")}`
+              : "Veri bekleniyor..."}
           </div>
         </div>
 
-        {/* Fan Durumu */}
+        {/* Toplam Ölçüm */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="bg-blue-100 p-3 rounded-lg">
-              <Fan size={20} className="text-blue-700" />
+              <TrendingUp size={20} className="text-blue-700" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Fan Durumu</h3>
-              <p className="text-sm text-gray-600">Soğutma fanı</p>
+              <h3 className="font-semibold text-gray-900">Toplam Ölçüm</h3>
+              <p className="text-sm text-gray-600">Kayıt sayısı</p>
             </div>
           </div>
           <div className="flex items-center gap-2 mb-2">
-            {fanIsOn ? (
-              <CheckCircle size={16} className="text-green-600" />
-            ) : (
-              <AlertTriangle size={16} className="text-red-600" />
-            )}
-            <span className="text-sm font-medium">{fanIsOn ? "Aktif" : "Pasif"}</span>
+            <ActivityIcon size={16} className="text-blue-600" />
+            <span className="text-sm font-medium">
+              {sensorHistory.length} kayıt
+            </span>
           </div>
           <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Clock size={12} /> Son değişim: {new Date(fanLastChanged).toLocaleTimeString("tr-TR")}
+            <Clock size={12} /> Bellek: Son 50 kayıt tutulur
           </div>
         </div>
 
         {/* Bağlantı Durumu */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-3">
-            <div className="bg-cyan-100 p-3 rounded-lg">
-              <Wifi size={20} className="text-cyan-700" />
+            <div
+              className={`${
+                isConnected ? "bg-cyan-100" : "bg-gray-100"
+              } p-3 rounded-lg`}
+            >
+              {isConnected ? (
+                <Wifi size={20} className="text-cyan-700" />
+              ) : (
+                <WifiOff size={20} className="text-gray-500" />
+              )}
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Bağlantı</h3>
-              <p className="text-sm text-gray-600">WiFi: {device.wifiSSID}</p>
+              <p className="text-sm text-gray-600">WebSocket</p>
             </div>
           </div>
           <div className="flex items-center gap-2 mb-2">
-            <ActivityIcon size={16} className="text-gray-600" />
-            <span className="text-sm font-medium">Stabil</span>
+            {isConnected ? (
+              <CheckCircle size={16} className="text-green-600" />
+            ) : (
+              <AlertTriangle size={16} className="text-red-600" />
+            )}
+            <span className="text-sm font-medium">
+              {isConnected ? "Bağlı" : "Bağlı Değil"}
+            </span>
           </div>
-          <div className="text-xs text-gray-500">Konum: {device.location}</div>
+          <div className="text-xs text-gray-500">Gerçek zamanlı veri akışı</div>
         </div>
       </div>
 
@@ -171,9 +294,13 @@ export default function Activity() {
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <ActivityIcon size={18} className="text-purple-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Zaman Çizelgesi</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Zaman Çizelgesi
+            </h2>
           </div>
-          <span className="text-xs text-gray-500">Toplam olay: {events.length}</span>
+          <span className="text-xs text-gray-500">
+            Toplam olay: {events.length}
+          </span>
         </div>
         <div className="divide-y divide-gray-100">
           {events.map((evt) => (
@@ -186,8 +313,16 @@ export default function Activity() {
                     {new Date(evt.timestamp).toLocaleString("tr-TR")}
                   </p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded border ${getSeverityClasses(evt.severity)}`}>
-                  {evt.severity === "high" ? "Acil" : evt.severity === "medium" ? "Orta" : "Düşük"}
+                <span
+                  className={`text-xs px-2 py-1 rounded border ${getSeverityClasses(
+                    evt.severity
+                  )}`}
+                >
+                  {evt.severity === "high"
+                    ? "Acil"
+                    : evt.severity === "medium"
+                    ? "Orta"
+                    : "Düşük"}
                 </span>
               </div>
             </div>
@@ -202,24 +337,48 @@ export default function Activity() {
             <Droplets size={20} className="text-cyan-600" />
             <h3 className="font-semibold text-gray-900">Nem</h3>
           </div>
-          <div className="text-2xl font-bold text-gray-900">%{latest.humidity.toFixed(1)}</div>
-          <div className="text-xs text-gray-500">Zaman: {new Date(latest.timestamp).toLocaleTimeString("tr-TR")}</div>
+          <div className="text-2xl font-bold text-gray-900">
+            {currentData ? `%${currentData.humidity.toFixed(1)}` : "--"}
+          </div>
+          <div className="text-xs text-gray-500">
+            {currentData
+              ? `Zaman: ${new Date(currentData.timestamp).toLocaleTimeString(
+                  "tr-TR"
+                )}`
+              : "Veri bekleniyor..."}
+          </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-3">
             <Thermometer size={20} className="text-blue-600" />
             <h3 className="font-semibold text-gray-900">Ortam Sıcaklığı</h3>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{latest.temperature.toFixed(1)}°C</div>
-          <div className="text-xs text-gray-500">Zaman: {new Date(latest.timestamp).toLocaleTimeString("tr-TR")}</div>
+          <div className="text-2xl font-bold text-gray-900">
+            {currentData ? `${currentData.temperature.toFixed(1)}°C` : "--"}
+          </div>
+          <div className="text-xs text-gray-500">
+            {currentData
+              ? `Zaman: ${new Date(currentData.timestamp).toLocaleTimeString(
+                  "tr-TR"
+                )}`
+              : "Veri bekleniyor..."}
+          </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-3">
             <Thermometer size={20} className="text-red-600" />
             <h3 className="font-semibold text-gray-900">Vücut Sıcaklığı</h3>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{latest.bodyTemperature.toFixed(1)}°C</div>
-          <div className="text-xs text-gray-500">Zaman: {new Date(latest.timestamp).toLocaleTimeString("tr-TR")}</div>
+          <div className="text-2xl font-bold text-gray-900">
+            {currentData ? `${currentData.bodyTemperature.toFixed(1)}°C` : "--"}
+          </div>
+          <div className="text-xs text-gray-500">
+            {currentData
+              ? `Zaman: ${new Date(currentData.timestamp).toLocaleTimeString(
+                  "tr-TR"
+                )}`
+              : "Veri bekleniyor..."}
+          </div>
         </div>
       </div>
     </div>

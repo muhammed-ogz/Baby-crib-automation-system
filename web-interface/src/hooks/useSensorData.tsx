@@ -97,35 +97,56 @@ export function useSensorData(): UseSensorDataReturn {
     // Sensor data event handler
     socket.on("sensorData", (data: SensorData) => {
       console.log("📊 Sensor data received:", data);
+      console.log("🚨 Alerts in data:", data.alerts);
       setSensorData(data);
       setError(null);
 
-      // Show alerts if any
+      // Backend zaten threshold kontrolü yapıyor ve alerts gönderiyor
+      // Tüm threshold uyarılarını göster
       if (data.alerts && data.alerts.length > 0) {
+        console.log(`⚠️ Processing ${data.alerts.length} alerts...`);
         data.alerts.forEach((alert) => {
+          console.log(
+            `🔔 Alert type: ${alert.type}, value: ${alert.value}, threshold:`,
+            alert.threshold
+          );
+
           const alertMessages: Record<string, string> = {
-            temperature_high: `Yüksek sıcaklık: ${data.temperature.toFixed(
+            temperature_high: `🌡️ Yüksek ortam sıcaklığı: ${data.temperature.toFixed(
               1
-            )}°C`,
-            temperature_low: `Düşük sıcaklık: ${data.temperature.toFixed(1)}°C`,
-            humidity_high: `Yüksek nem: ${data.humidity.toFixed(1)}%`,
-            humidity_low: `Düşük nem: ${data.humidity.toFixed(1)}%`,
-            body_temp_high: `Yüksek vücut sıcaklığı: ${data.bodyTemperature.toFixed(
+            )}°C (Normal: ${alert.threshold.min}-${alert.threshold.max}°C)`,
+            temperature_low: `❄️ Düşük ortam sıcaklığı: ${data.temperature.toFixed(
               1
-            )}°C`,
-            body_temp_low: `Düşük vücut sıcaklığı: ${data.bodyTemperature.toFixed(
+            )}°C (Normal: ${alert.threshold.min}-${alert.threshold.max}°C)`,
+            humidity_high: `💧 Yüksek nem: ${data.humidity.toFixed(
               1
-            )}°C`,
+            )}% (Normal: ${alert.threshold.min}-${alert.threshold.max}%)`,
+            humidity_low: `🏜️ Düşük nem: ${data.humidity.toFixed(
+              1
+            )}% (Normal: ${alert.threshold.min}-${alert.threshold.max}%)`,
+            body_temp_high: `🚨 Yüksek vücut sıcaklığı: ${data.bodyTemperature.toFixed(
+              1
+            )}°C (Normal: ${alert.threshold.min}-${alert.threshold.max}°C)`,
+            body_temp_low: `🧊 Düşük vücut sıcaklığı: ${data.bodyTemperature.toFixed(
+              1
+            )}°C (Normal: ${alert.threshold.min}-${alert.threshold.max}°C)`,
           };
 
-          const message = alertMessages[alert.type] || `Uyarı: ${alert.type}`;
+          const message =
+            alertMessages[alert.type] || `⚠️ Uyarı: ${alert.type}`;
+          console.log(`📢 Showing toast: ${message}`);
+
+          // Vücut sıcaklığı uyarıları en kritik
+          const isBodyTempAlert = alert.type.includes("body_temp");
 
           toast.error(message, {
-            icon: "⚠️",
-            duration: 5000,
+            icon: isBodyTempAlert ? "🚨" : "⚠️",
+            duration: isBodyTempAlert ? 8000 : 6000,
             position: "top-right",
           });
         });
+      } else {
+        console.log("✅ No alerts - all values within thresholds");
       }
     });
 

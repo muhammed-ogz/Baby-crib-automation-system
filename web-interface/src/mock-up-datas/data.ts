@@ -11,7 +11,7 @@ import { ALERT_TYPES, DEVICE_STATUS } from "../types/data";
 export const mockSensorData: SensorData[] = [
   {
     id: "1",
-    deviceId: "device-001",
+    deviceId: "esp32",
     timestamp: new Date().toISOString(),
     temperature: 23.5,
     humidity: 55.2,
@@ -86,7 +86,7 @@ export const mockSensorData: SensorData[] = [
 // Cihaz bilgileri
 export const mockDevices: Device[] = [
   {
-    id: "device-001",
+    id: "esp32",
     name: "ESP32 Bebek Beşik Sensörü",
     status: DEVICE_STATUS.WORKING,
     lastSeen: new Date().toISOString(),
@@ -100,7 +100,7 @@ export const mockAlerts: Alert[] = [
     type: ALERT_TYPES.BODY_TEMP_HIGH,
     message: "Bebek vücut sıcaklığı normal seviyenin üzerinde (37.2°C)",
     timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    deviceId: "device-001",
+    deviceId: "esp32",
     severity: "high",
     isRead: false,
   },
@@ -109,7 +109,7 @@ export const mockAlerts: Alert[] = [
     type: ALERT_TYPES.HUMIDITY_LOW,
     message: "Ortam nemi düşük seviyede (%42)",
     timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    deviceId: "device-001",
+    deviceId: "esp32",
     severity: "medium",
     isRead: true,
   },

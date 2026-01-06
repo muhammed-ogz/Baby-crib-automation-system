@@ -19,14 +19,13 @@ import {
   YAxis,
 } from "recharts";
 import { useSensorData } from "../hooks/useSensorData";
-import { defaultThresholds, mockDevices } from "../mock-up-datas/data";
-import type { Device, SensorData } from "../types/data";
-import { DEVICE_STATUS } from "../types/data";
+import { defaultThresholds } from "../mock-up-datas/data";
+import type { SensorData } from "../types/data";
 
 export default function Home() {
   const { sensorData, isConnected, isLoading, error } = useSensorData();
   const [currentData, setCurrentData] = useState<SensorData | null>(null);
-  const [device] = useState<Device>(mockDevices[0]);
+  const deviceName = "ESP32 Bebek Beşik Sensörü";
   const [chartData, setChartData] = useState<
     Array<{
       time: string;
@@ -114,32 +113,6 @@ export default function Home() {
     }
   };
 
-  const getDeviceStatusColor = (status: string) => {
-    switch (status) {
-      case DEVICE_STATUS.WORKING:
-        return "text-green-600 bg-green-50";
-      case DEVICE_STATUS.DISABLED:
-        return "text-yellow-600 bg-yellow-50";
-      case DEVICE_STATUS.ERROR:
-        return "text-red-600 bg-red-50";
-      default:
-        return "text-gray-600 bg-gray-50";
-    }
-  };
-
-  const getDeviceStatusText = (status: string) => {
-    switch (status) {
-      case DEVICE_STATUS.WORKING:
-        return "Çalışıyor";
-      case DEVICE_STATUS.DISABLED:
-        return "Devre Dışı";
-      case DEVICE_STATUS.ERROR:
-        return "Sistemsel Arıza";
-      default:
-        return "Bilinmeyen";
-    }
-  };
-
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString("tr-TR", {
       hour: "2-digit",
@@ -177,11 +150,8 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-1">
-              {device.name}
+              {deviceName}
             </h2>
-            <p className="text-sm text-gray-600">
-              Konum: {device.location} • WiFi: {device.wifiSSID}
-            </p>
             {currentData && (
               <p className="text-xs text-gray-500 mt-1">
                 Son güncelleme: {formatTime(currentData.timestamp)}
@@ -191,9 +161,11 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
             <div
-              className={`px-3 py-2 rounded-lg flex items-center gap-2 ${getDeviceStatusColor(
-                isConnected ? DEVICE_STATUS.WORKING : DEVICE_STATUS.ERROR
-              )}`}
+              className={`px-3 py-2 rounded-lg flex items-center gap-2 ${
+                isConnected
+                  ? "text-green-600 bg-green-50"
+                  : "text-red-600 bg-red-50"
+              }`}
             >
               {isConnected ? (
                 <CheckCircle size={16} />
@@ -384,11 +356,19 @@ export default function Home() {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="time" stroke="#6b7280" />
+              <XAxis dataKey="time" stroke="#6b7280" tick={{ fontSize: 12 }} />
               <YAxis
-                domain={[35, 38]}
+                domain={[20, 40]}
                 stroke="#6b7280"
-                label={{ value: "°C", angle: -90, position: "insideLeft" }}
+                label={{
+                  value: "Sıcaklık (°C)",
+                  angle: -90,
+                  position: "insideLeft",
+                }}
+                tickFormatter={(value) => `${value}°C`}
+                ticks={[20, 25, 30, 35, 40]}
+                allowDataOverflow={false}
+                tick={{ fontSize: 12 }}
               />
               <Tooltip
                 contentStyle={{
@@ -396,11 +376,11 @@ export default function Home() {
                   border: "1px solid #e5e7eb",
                   borderRadius: "8px",
                 }}
-                formatter={(value) => [
+                formatter={(value: number) => [
                   `${value.toFixed(1)}°C`,
                   "Vücut Sıcaklığı",
                 ]}
-                labelFormatter={(label) => `${label} önce`}
+                labelFormatter={(label) => `Saat: ${label}`}
               />
               <Legend />
               <Line

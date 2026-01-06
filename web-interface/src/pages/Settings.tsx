@@ -7,15 +7,19 @@ import {
   Save,
   Thermometer,
   Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { defaultThresholds, mockDevices } from "../mock-up-datas/data";
-import type { Device, ThresholdSettings } from "../types/data";
+import { useSensorData } from "../hooks/useSensorData";
+import { defaultThresholds } from "../mock-up-datas/data";
+import type { ThresholdSettings } from "../types/data";
 import { DEVICE_STATUS } from "../types/data";
 
 export default function Settings() {
-  const [device] = useState<Device>(mockDevices[0]);
+  const { isConnected } = useSensorData();
+  const deviceId = "esp32";
+  const deviceName = "ESP32 Bebek Beşik Sensörü";
   const [thresholds, setThresholds] =
     useState<ThresholdSettings>(defaultThresholds);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,7 +33,7 @@ export default function Settings() {
       try {
         setIsLoading(true);
         const response = await fetch(
-          `${API_URL}/api/settings/thresholds?deviceId=${device.id}`
+          `${API_URL}/api/settings/thresholds?deviceId=${deviceId}`
         );
         const result = await response.json();
 
@@ -45,7 +49,7 @@ export default function Settings() {
     };
 
     fetchThresholds();
-  }, [API_URL, device.id]);
+  }, [API_URL, deviceId]);
 
   // Eşik değer güncelleme
   const updateThreshold = (
@@ -73,7 +77,7 @@ export default function Settings() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          deviceId: device.id,
+          deviceId: deviceId,
           thresholds,
         }),
       });
@@ -170,16 +174,7 @@ export default function Settings() {
                     Cihaz Adı
                   </label>
                   <div className="p-3 bg-gray-50 rounded-lg border">
-                    {device.name}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cihaz ID
-                  </label>
-                  <div className="p-3 bg-gray-50 rounded-lg border font-mono text-sm">
-                    {device.id}
+                    {deviceName}
                   </div>
                 </div>
 
@@ -189,12 +184,14 @@ export default function Settings() {
                   </label>
                   <div
                     className={`p-3 rounded-lg border flex items-center gap-2 ${getDeviceStatusColor(
-                      device.status
+                      isConnected ? DEVICE_STATUS.WORKING : DEVICE_STATUS.ERROR
                     )}`}
                   >
-                    {getDeviceStatusIcon(device.status)}
+                    {getDeviceStatusIcon(
+                      isConnected ? DEVICE_STATUS.WORKING : DEVICE_STATUS.ERROR
+                    )}
                     <span className="font-medium">
-                      {getDeviceStatusText(device.status)}
+                      {isConnected ? "Çalışıyor" : "Bağlantı Yok"}
                     </span>
                   </div>
                 </div>
@@ -204,10 +201,10 @@ export default function Settings() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Son Görülme
+                    Cihaz ID
                   </label>
-                  <div className="p-3 bg-gray-50 rounded-lg border">
-                    {new Date(device.lastSeen).toLocaleString("tr-TR")}
+                  <div className="p-3 bg-gray-50 rounded-lg border font-mono text-sm">
+                    {deviceId}
                   </div>
                 </div>
 
@@ -217,15 +214,13 @@ export default function Settings() {
                   </label>
                   <div
                     className={`p-3 rounded-lg border flex items-center gap-2 ${
-                      device.status === "working"
+                      isConnected
                         ? "bg-green-50 border-green-200 text-green-700"
-                        : "bg-gray-50 border-gray-200 text-gray-700"
+                        : "bg-red-50 border-red-200 text-red-700"
                     }`}
                   >
-                    <Wifi size={16} />
-                    <span>
-                      {device.status === "working" ? "Bağlı" : "Bağlantı Yok"}
-                    </span>
+                    {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+                    <span>{isConnected ? "Bağlı" : "Bağlantı Yok"}</span>
                   </div>
                 </div>
               </div>
