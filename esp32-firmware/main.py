@@ -23,8 +23,9 @@ class SensorReader:
 
         # DHT11 başlat
         try:
-            self.dht_sensor = dht.DHT11(Pin(DHT_PIN))
-            print("✓ DHT11 başlatıldı")
+            # Pull-up resistor aktif et (ETIMEDOUT hatasını önler)
+            self.dht_sensor = dht.DHT11(Pin(DHT_PIN, Pin.IN, Pin.PULL_UP))
+            print("✓ DHT11 başlatıldı (pull-up aktif)")
         except Exception as e:
             print(f"✗ DHT11 hatası: {e}")
             self.dht_sensor = None
@@ -37,6 +38,20 @@ class SensorReader:
             # I2C cihazlarını tara
             devices = self.i2c.scan()
             print(f"Bulunan I2C adresleri: {[hex(d) for d in devices]}")
+
+            # Debug: Her cihazı tanımla
+            if devices:
+                for addr in devices:
+                    if addr == 0x5A:
+                        print(f"  └─ 0x5A: MLX90614 (IR Sıcaklık)")
+                    elif addr == 0x76:
+                        print(f"  └─ 0x76: BME280/BMP280")
+                    elif addr == 0x77:
+                        print(f"  └─ 0x77: BME280/BMP280")
+                    else:
+                        print(f"  └─ {hex(addr)}: Bilinmeyen cihaz")
+            else:
+                print("⚠️  Hiç I2C cihaz bulunamadı - bağlantıları kontrol edin!")
 
         except Exception as e:
             print(f"✗ I2C hatası: {e}")
@@ -53,10 +68,21 @@ class SensorReader:
 
         # BME280 başlat (adres: 0x76 veya 0x77)
         try:
-            self.bme = bme280.BME280(i2c=self.i2c)
-            print("✓ BME280 başlatıldı")
+            # Önce varsayılan adres 0x76'yı dene
+            if 0x76 in devices:
+                self.bme = bme280.BME280(i2c=self.i2c, address=0x76)
+                print("✓ BME280 başlatıldı (adres: 0x76)")
+            # Bulunamazsa 0x77'yi dene
+            elif 0x77 in devices:
+                self.bme = bme280.BME280(i2c=self.i2c, address=0x77)
+                print("✓ BME280 başlatıldı (adres: 0x77)")
+            else:
+                raise RuntimeError("BME280 I2C adresinde bulunamadı (0x76 veya 0x77)")
         except Exception as e:
             print(f"✗ BME280 hatası: {e}")
+            print(
+                "   Kontrol edin: SDO pini GND'ye mi bağlı (0x76) yoksa VCC'ye mi (0x77)?"
+            )
             self.bme = None
 
     def read_dht11(self):
@@ -65,10 +91,19 @@ class SensorReader:
             return None, None
 
         try:
+            # DHT11, iki okuma arası minimum 2 saniye beklemeli
+            time.sleep(2)
             self.dht_sensor.measure()
             temp = self.dht_sensor.temperature()
             hum = self.dht_sensor.humidity()
             return temp, hum
+        except OSError as e:
+            if "ETIMEDOUT" in str(e):
+                print(f"DHT11 okuma hatası: {e}")
+                print("  ⚠️  Pull-up resistor (4.7kΩ) GPIO4 ile 3.3V arası eklenmelidir")
+            else:
+                print(f"DHT11 okuma hatası: {e}")
+            return None, None
         except Exception as e:
             print(f"DHT11 okuma hatası: {e}")
             return None, None
