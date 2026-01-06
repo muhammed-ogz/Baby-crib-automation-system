@@ -8,7 +8,8 @@ import {
   Thermometer,
   Wifi,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { defaultThresholds, mockDevices } from "../mock-up-datas/data";
 import type { Device, ThresholdSettings } from "../types/data";
 import { DEVICE_STATUS } from "../types/data";
@@ -18,6 +19,33 @@ export default function Settings() {
   const [thresholds, setThresholds] =
     useState<ThresholdSettings>(defaultThresholds);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  // Sayfa yüklenirken mevcut threshold değerlerini çek
+  useEffect(() => {
+    const fetchThresholds = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(
+          `${API_URL}/api/settings/thresholds?deviceId=${device.id}`
+        );
+        const result = await response.json();
+
+        if (result.success && result.data.thresholds) {
+          setThresholds(result.data.thresholds);
+        }
+      } catch (error) {
+        console.error("Failed to fetch thresholds:", error);
+        toast.error("⚠️ Ayarlar yüklenemedi, varsayılan değerler kullanılıyor");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchThresholds();
+  }, [API_URL, device.id]);
 
   // Eşik değer güncelleme
   const updateThreshold = (
@@ -34,13 +62,37 @@ export default function Settings() {
     }));
   };
 
-  // Ayarları kaydetme simülasyonu
+  // Ayarları kaydetme
   const handleSave = async () => {
-    setIsSaving(true);
-    // Simülasyon için 1 saniye bekle
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
-    // Başarı bildirimi burada olacak (toast)
+    try {
+      setIsSaving(true);
+
+      const response = await fetch(`${API_URL}/api/settings/thresholds`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          deviceId: device.id,
+          thresholds,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        toast.success("✅ Ayarlar başarıyla kaydedildi!");
+      } else {
+        throw new Error(result.message || "Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving thresholds:", error);
+      toast.error(
+        "❌ Ayarlar kaydedilirken bir hata oluştu. Lütfen tekrar deneyin."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Cihaz durumu rengi
@@ -94,273 +146,298 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* Cihaz Bilgileri */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Cihaz Bilgileri
-        </h2>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Cihaz Durumu */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cihaz Adı
-              </label>
-              <div className="p-3 bg-gray-50 rounded-lg border">
-                {device.name}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Konum
-              </label>
-              <div className="p-3 bg-gray-50 rounded-lg border">
-                {device.location}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Durum
-              </label>
-              <div
-                className={`p-3 rounded-lg border flex items-center gap-2 ${getDeviceStatusColor(
-                  device.status
-                )}`}
-              >
-                {getDeviceStatusIcon(device.status)}
-                <span className="font-medium">
-                  {getDeviceStatusText(device.status)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* WiFi Bilgileri */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                WiFi Ağı
-              </label>
-              <div className="p-3 bg-gray-50 rounded-lg border flex items-center gap-2">
-                <Wifi size={16} className="text-gray-600" />
-                <span>{device.wifiSSID}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Son Görülme
-              </label>
-              <div className="p-3 bg-gray-50 rounded-lg border">
-                {new Date(device.lastSeen).toLocaleString("tr-TR")}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cihaz ID
-              </label>
-              <div className="p-3 bg-gray-50 rounded-lg border font-mono text-sm">
-                {device.id}
-              </div>
-            </div>
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <RefreshCw className="animate-spin text-blue-600" size={40} />
+            <p className="text-gray-600">Ayarlar yükleniyor...</p>
           </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Cihaz Bilgileri */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Cihaz Bilgileri
+            </h2>
 
-      {/* Eşik Değer Ayarları */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Uyarı Eşik Değerleri
-        </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Cihaz Durumu */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cihaz Adı
+                  </label>
+                  <div className="p-3 bg-gray-50 rounded-lg border">
+                    {device.name}
+                  </div>
+                </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Ortam Sıcaklığı */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <Thermometer size={20} className="text-blue-600" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cihaz ID
+                  </label>
+                  <div className="p-3 bg-gray-50 rounded-lg border font-mono text-sm">
+                    {device.id}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Durum
+                  </label>
+                  <div
+                    className={`p-3 rounded-lg border flex items-center gap-2 ${getDeviceStatusColor(
+                      device.status
+                    )}`}
+                  >
+                    {getDeviceStatusIcon(device.status)}
+                    <span className="font-medium">
+                      {getDeviceStatusText(device.status)}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Ortam Sıcaklığı</h3>
-                <p className="text-sm text-gray-600">°C cinsinden</p>
+
+              {/* Cihaz Durumu Bilgileri */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Son Görülme
+                  </label>
+                  <div className="p-3 bg-gray-50 rounded-lg border">
+                    {new Date(device.lastSeen).toLocaleString("tr-TR")}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Bağlantı Durumu
+                  </label>
+                  <div
+                    className={`p-3 rounded-lg border flex items-center gap-2 ${
+                      device.status === "working"
+                        ? "bg-green-50 border-green-200 text-green-700"
+                        : "bg-gray-50 border-gray-200 text-gray-700"
+                    }`}
+                  >
+                    <Wifi size={16} />
+                    <span>
+                      {device.status === "working" ? "Bağlı" : "Bağlantı Yok"}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.temperature.min}
-                onChange={(e) =>
-                  updateThreshold(
-                    "temperature",
-                    "min",
-                    parseFloat(e.target.value)
-                  )
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ease-in-out hover:border-gray-400 focus:transform focus:scale-[1.02]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Maksimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.temperature.max}
-                onChange={(e) =>
-                  updateThreshold(
-                    "temperature",
-                    "max",
-                    parseFloat(e.target.value)
-                  )
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
             </div>
           </div>
 
-          {/* Ortam Nemi */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-cyan-100 p-2 rounded-lg">
-                <Droplets size={20} className="text-cyan-600" />
+          {/* Eşik Değer Ayarları */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Uyarı Eşik Değerleri
+            </h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Ortam Sıcaklığı */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-blue-100 p-2 rounded-lg">
+                    <Thermometer size={20} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">
+                      Ortam Sıcaklığı
+                    </h3>
+                    <p className="text-sm text-gray-600">°C cinsinden</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Minimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.temperature.min}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "temperature",
+                        "min",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ease-in-out hover:border-gray-400 focus:transform focus:scale-[1.02]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Maksimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.temperature.max}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "temperature",
+                        "max",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Ortam Nemi</h3>
-                <p className="text-sm text-gray-600">% cinsinden</p>
+
+              {/* Ortam Nemi */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-cyan-100 p-2 rounded-lg">
+                    <Droplets size={20} className="text-cyan-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Ortam Nemi</h3>
+                    <p className="text-sm text-gray-600">% cinsinden</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Minimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.humidity.min}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "humidity",
+                        "min",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Maksimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.humidity.max}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "humidity",
+                        "max",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Vücut Sıcaklığı */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-red-100 p-2 rounded-lg">
+                    <Heart size={20} className="text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">
+                      Vücut Sıcaklığı
+                    </h3>
+                    <p className="text-sm text-gray-600">°C cinsinden</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Minimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.bodyTemperature.min}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "bodyTemperature",
+                        "min",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Maksimum Değer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={thresholds.bodyTemperature.max}
+                    onChange={(e) =>
+                      updateThreshold(
+                        "bodyTemperature",
+                        "max",
+                        parseFloat(e.target.value)
+                      )
+                    }
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.humidity.min}
-                onChange={(e) =>
-                  updateThreshold("humidity", "min", parseFloat(e.target.value))
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+            {/* Kaydet Butonu */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <div className="text-sm text-gray-600">
+                  Değişiklikler otomatik olarak cihaza gönderilecektir.
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Maksimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.humidity.max}
-                onChange={(e) =>
-                  updateThreshold("humidity", "max", parseFloat(e.target.value))
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ease-in-out hover:transform hover:scale-105 active:scale-95 hover:shadow-lg"
+                >
+                  <Save size={16} />
+                  {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Vücut Sıcaklığı */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-red-100 p-2 rounded-lg">
-                <Heart size={20} className="text-red-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Vücut Sıcaklığı</h3>
-                <p className="text-sm text-gray-600">°C cinsinden</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.bodyTemperature.min}
-                onChange={(e) =>
-                  updateThreshold(
-                    "bodyTemperature",
-                    "min",
-                    parseFloat(e.target.value)
-                  )
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Maksimum Değer
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={thresholds.bodyTemperature.max}
-                onChange={(e) =>
-                  updateThreshold(
-                    "bodyTemperature",
-                    "max",
-                    parseFloat(e.target.value)
-                  )
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          {/* Yardımcı Bilgiler */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="font-medium text-blue-900 mb-2">
+              Önerilen Değerler
+            </h3>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>
+                • <strong>Ortam Sıcaklığı:</strong> 20-26°C arası bebek odası
+                için idealdir
+              </li>
+              <li>
+                • <strong>Ortam Nemi:</strong> %45-65 arası solunum sağlığı için
+                uygundur
+              </li>
+              <li>
+                • <strong>Vücut Sıcaklığı:</strong> 36-37°C arası normal bebek
+                sıcaklığıdır
+              </li>
+            </ul>
           </div>
-        </div>
-
-        {/* Kaydet Butonu */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-            <div className="text-sm text-gray-600">
-              Değişiklikler otomatik olarak cihaza gönderilecektir.
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ease-in-out hover:transform hover:scale-105 active:scale-95 hover:shadow-lg"
-            >
-              <Save size={16} />
-              {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Yardımcı Bilgiler */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-medium text-blue-900 mb-2">Önerilen Değerler</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>
-            • <strong>Ortam Sıcaklığı:</strong> 20-26°C arası bebek odası için
-            idealdir
-          </li>
-          <li>
-            • <strong>Ortam Nemi:</strong> %45-65 arası solunum sağlığı için
-            uygundur
-          </li>
-          <li>
-            • <strong>Vücut Sıcaklığı:</strong> 36-37°C arası normal bebek
-            sıcaklığıdır
-          </li>
-        </ul>
-      </div>
+        </>
+      )}
     </div>
   );
 }
