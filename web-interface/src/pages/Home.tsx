@@ -5,6 +5,7 @@ import {
   Heart,
   Thermometer,
   Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -17,76 +18,61 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useAlertToast } from "../hooks/useAlertToast";
-import {
-  defaultThresholds,
-  generateRandomSensorData,
-  mockAlerts,
-  mockDevices,
-  mockSensorData,
-} from "../mock-up-datas/data";
+import { useSensorData } from "../hooks/useSensorData";
+import { defaultThresholds, mockDevices } from "../mock-up-datas/data";
 import type { Device, SensorData } from "../types/data";
 import { DEVICE_STATUS } from "../types/data";
 
 export default function Home() {
-  const [currentData, setCurrentData] = useState<SensorData>(mockSensorData[0]);
+  const { sensorData, isConnected, isLoading, error } = useSensorData();
+  const [currentData, setCurrentData] = useState<SensorData | null>(null);
   const [device] = useState<Device>(mockDevices[0]);
-  const [chartData, setChartData] = useState(
-    mockSensorData
-      .slice()
-      .reverse()
-      .map((data, index) => ({
-        time: `${index * 5}m`,
-        bodyTemp: data.bodyTemperature,
-        timestamp: new Date(data.timestamp).toLocaleTimeString("tr-TR"),
-      }))
-  );
+  const [chartData, setChartData] = useState<
+    Array<{
+      time: string;
+      bodyTemp: number;
+      timestamp: string;
+    }>
+  >([]);
 
-  // Alert toast hook'unu kullan
-  useAlertToast(mockAlerts);
-
-  // Backend'den veri çekme
-  const fetchSensorData = async () => {
-    try {
-      // URL'den parametreleri al (örnek olarak sabit değerler)
-      const params = new URLSearchParams(window.location.search);
-      const temperature = params.get('temperature') || '22';
-      const humidity = params.get('humidity') || '60';
-      const babyTemperature = params.get('babyTemperature') || '36.5';
-
-      const response = await fetch(
-        `http://localhost:3001/v1/values?temperature=${temperature}&humidity=${humidity}&babyTemperature=${babyTemperature}`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentData({
-          id: currentData.id,
-          deviceId: currentData.deviceId,
-          temperature: parseFloat(data.temperature),
-          humidity: parseFloat(data.humidity),
-          bodyTemperature: parseFloat(data.babyTemperature),
-          timestamp: data.timestamp,
-        });
-      }
-    } catch (error) {
-      // Backend bağlantısı yoksa mock veri kullan
-      console.log('Backend bağlantısı yok, mock veri kullanılıyor');
-      const newData = generateRandomSensorData();
-      setCurrentData(newData);
-    }
-  };
-
-  // Gerçek zamanlı veri simülasyonu
+  // Update current data when sensor data changes
   useEffect(() => {
-    fetchSensorData(); // İlk yüklemede veri çek
-    
-    const interval = setInterval(() => {
-      fetchSensorData();
-    }, 5000); // 5 saniyede bir güncelle
+    if (sensorData) {
+      const newDataPoint = {
+        id: sensorData.id,
+        deviceId: sensorData.deviceId,
+        temperature: sensorData.temperature,
+        humidity: sensorData.humidity,
+        bodyTemperature: sensorData.bodyTemperature,
+        timestamp: sensorData.timestamp,
+      };
 
-    return () => clearInterval(interval);
-  }, []);
+      setCurrentData(newDataPoint);
+
+      // Update chart data (keep last 40 minutes = 480 data points at 5s interval)
+      setChartData((prev) => {
+        const newChart = [
+          ...prev,
+          {
+            time: new Date(sensorData.timestamp).toLocaleTimeString("tr-TR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            bodyTemp: sensorData.bodyTemperature,
+            timestamp: new Date(sensorData.timestamp).toLocaleTimeString(
+              "tr-TR"
+            ),
+          },
+        ];
+
+        // Keep only last 480 data points (40 minutes)
+        if (newChart.length > 480) {
+          return newChart.slice(-480);
+        }
+        return newChart;
+      });
+    }
+  }, [sensorData]);
 
   // Değer durumu kontrolü
   const getValueStatus = (value: number, min: number, max: number) => {
@@ -95,21 +81,27 @@ export default function Home() {
     return "normal";
   };
 
-  const tempStatus = getValueStatus(
-    currentData.temperature,
-    defaultThresholds.temperature.min,
-    defaultThresholds.temperature.max
-  );
-  const humidityStatus = getValueStatus(
-    currentData.humidity,
-    defaultThresholds.humidity.min,
-    defaultThresholds.humidity.max
-  );
-  const bodyTempStatus = getValueStatus(
-    currentData.bodyTemperature,
-    defaultThresholds.bodyTemperature.min,
-    defaultThresholds.bodyTemperature.max
-  );
+  const tempStatus = currentData
+    ? getValueStatus(
+        currentData.temperature,
+        defaultThresholds.temperature.min,
+        defaultThresholds.temperature.max
+      )
+    : "normal";
+  const humidityStatus = currentData
+    ? getValueStatus(
+        currentData.humidity,
+        defaultThresholds.humidity.min,
+        defaultThresholds.humidity.max
+      )
+    : "normal";
+  const bodyTempStatus = currentData
+    ? getValueStatus(
+        currentData.bodyTemperature,
+        defaultThresholds.bodyTemperature.min,
+        defaultThresholds.bodyTemperature.max
+      )
+    : "normal";
 
   // Durum renklerini belirle
   const getStatusColor = (status: string) => {
@@ -167,6 +159,19 @@ export default function Home() {
         </p>
       </div>
 
+      {/* Bağlantı Durumu */}
+      {!isConnected && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
+          <WifiOff size={20} className="text-yellow-600" />
+          <div>
+            <p className="text-sm font-medium text-yellow-800">
+              {isLoading ? "Sunucuya bağlanılıyor..." : "Sunucu bağlantısı yok"}
+            </p>
+            {error && <p className="text-xs text-yellow-600 mt-1">{error}</p>}
+          </div>
+        </div>
+      )}
+
       {/* Cihaz Durumu */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 ease-in-out hover:shadow-md hover:border-gray-300 hover:transform hover:scale-[1.01]">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -177,29 +182,41 @@ export default function Home() {
             <p className="text-sm text-gray-600">
               Konum: {device.location} • WiFi: {device.wifiSSID}
             </p>
+            {currentData && (
+              <p className="text-xs text-gray-500 mt-1">
+                Son güncelleme: {formatTime(currentData.timestamp)}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
             <div
               className={`px-3 py-2 rounded-lg flex items-center gap-2 ${getDeviceStatusColor(
-                device.status
+                isConnected ? DEVICE_STATUS.WORKING : DEVICE_STATUS.ERROR
               )}`}
             >
-              {device.status === DEVICE_STATUS.WORKING ? (
+              {isConnected ? (
                 <CheckCircle size={16} />
-              ) : device.status === DEVICE_STATUS.DISABLED ? (
-                <AlertTriangle size={16} />
               ) : (
                 <AlertTriangle size={16} />
               )}
               <span className="text-sm font-medium">
-                {getDeviceStatusText(device.status)}
+                {isConnected ? "Çalışıyor" : "Bağlantı Yok"}
               </span>
             </div>
 
             <div className="flex items-center gap-1 text-sm text-gray-500">
-              <Wifi size={16} />
-              <span>Bağlı</span>
+              {isConnected ? (
+                <>
+                  <Wifi size={16} className="text-green-600" />
+                  <span className="text-green-600">Bağlı</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={16} className="text-red-600" />
+                  <span className="text-red-600">Bağlı Değil</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -230,15 +247,17 @@ export default function Home() {
 
           <div className="space-y-2">
             <div className="text-3xl font-bold text-gray-900">
-              {currentData.temperature.toFixed(1)}°C
+              {currentData ? currentData.temperature.toFixed(1) : "--"}°C
             </div>
             <div className="text-sm text-gray-600">
               Normal aralık: {defaultThresholds.temperature.min}°C -{" "}
               {defaultThresholds.temperature.max}°C
             </div>
-            <div className="text-xs text-gray-500">
-              Son güncelleme: {formatTime(currentData.timestamp)}
-            </div>
+            {currentData && (
+              <div className="text-xs text-gray-500">
+                Son güncelleme: {formatTime(currentData.timestamp)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -265,15 +284,17 @@ export default function Home() {
 
           <div className="space-y-2">
             <div className="text-3xl font-bold text-gray-900">
-              %{currentData.humidity.toFixed(1)}
+              %{currentData ? currentData.humidity.toFixed(1) : "--"}
             </div>
             <div className="text-sm text-gray-600">
               Normal aralık: %{defaultThresholds.humidity.min} - %
               {defaultThresholds.humidity.max}
             </div>
-            <div className="text-xs text-gray-500">
-              Son güncelleme: {formatTime(currentData.timestamp)}
-            </div>
+            {currentData && (
+              <div className="text-xs text-gray-500">
+                Son güncelleme: {formatTime(currentData.timestamp)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -300,15 +321,17 @@ export default function Home() {
 
           <div className="space-y-2">
             <div className="text-3xl font-bold text-gray-900">
-              {currentData.bodyTemperature.toFixed(1)}°C
+              {currentData ? currentData.bodyTemperature.toFixed(1) : "--"}°C
             </div>
             <div className="text-sm text-gray-600">
               Normal aralık: {defaultThresholds.bodyTemperature.min}°C -{" "}
               {defaultThresholds.bodyTemperature.max}°C
             </div>
-            <div className="text-xs text-gray-500">
-              Son güncelleme: {formatTime(currentData.timestamp)}
-            </div>
+            {currentData && (
+              <div className="text-xs text-gray-500">
+                Son güncelleme: {formatTime(currentData.timestamp)}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -373,7 +396,10 @@ export default function Home() {
                   border: "1px solid #e5e7eb",
                   borderRadius: "8px",
                 }}
-                formatter={(value) => [`${value.toFixed(1)}°C`, "Vücut Sıcaklığı"]}
+                formatter={(value) => [
+                  `${value.toFixed(1)}°C`,
+                  "Vücut Sıcaklığı",
+                ]}
                 labelFormatter={(label) => `${label} önce`}
               />
               <Legend />
@@ -417,18 +443,22 @@ export default function Home() {
               {defaultThresholds.bodyTemperature.max}°C
             </p>
           </div>
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-gray-600">En Yüksek Kayıt</p>
-            <p className="font-semibold text-red-700">
-              {Math.max(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
-            </p>
-          </div>
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-gray-600">En Düşük Kayıt</p>
-            <p className="font-semibold text-blue-700">
-              {Math.min(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
-            </p>
-          </div>
+          {chartData.length > 0 && (
+            <>
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-gray-600">En Yüksek Kayıt</p>
+                <p className="font-semibold text-red-700">
+                  {Math.max(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
+                </p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-gray-600">En Düşük Kayıt</p>
+                <p className="font-semibold text-blue-700">
+                  {Math.min(...chartData.map((d) => d.bodyTemp)).toFixed(1)}°C
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
