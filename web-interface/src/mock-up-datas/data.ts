@@ -87,11 +87,9 @@ export const mockSensorData: SensorData[] = [
 export const mockDevices: Device[] = [
   {
     id: "device-001",
-    name: "Bebek Odası Sensörü",
-    wifiSSID: "EV_WIFI_5G",
+    name: "ESP32 Bebek Beşik Sensörü",
     status: DEVICE_STATUS.WORKING,
     lastSeen: new Date().toISOString(),
-    location: "Ana Yatak Odası",
   },
 ];
 
